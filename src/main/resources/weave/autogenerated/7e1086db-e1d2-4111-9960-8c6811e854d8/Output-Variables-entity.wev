@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_7e1086db_e1d2_4111_9960_8c6811e854d8_Output_Variables_entity = String | Null
+

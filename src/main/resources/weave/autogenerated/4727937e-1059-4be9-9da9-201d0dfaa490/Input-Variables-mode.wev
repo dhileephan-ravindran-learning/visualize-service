@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_4727937e_1059_4be9_9da9_201d0dfaa490_Input_Variables_mode = String | Null
+

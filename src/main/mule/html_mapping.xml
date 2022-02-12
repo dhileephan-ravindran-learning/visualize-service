@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:s3="http://www.mulesoft.org/schema/mule/s3" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/s3 http://www.mulesoft.org/schema/mule/s3/current/mule-s3.xsd">
+	
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="20203284-34e0-40c9-969e-4acdb8306a96" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="7f949e3d-5add-438f-9e72-cac017c92efe" file="mappings.yaml" />
+		<s3:config name="Amazon_S3_Configuration" doc:name="Amazon S3 Configuration" doc:id="a4ba6c54-dd85-4191-b688-c993254f6c74" >
+		<s3:basic-connection accessKey="#[p('protocols.s3.accessKey')]" secretKey="#[p('protocols.s3.secretKey')]" region="US_EAST_2"/>
+	</s3:config>
+	
+	<flow name="visualize_mapping_Flow" doc:id="7e1086db-e1d2-4111-9960-8c6811e854d8" >
+		<http:listener doc:name="Listener" doc:id="767a5520-60e2-47c7-b324-ae93f4d1dc79" config-ref="HTTP_Listener_config" path="/mapping-visualizer/{entity}"/>
+		<set-variable value="#[(if( isEmpty(vars.entity) ) attributes.uriParams.'entity' else vars.entity)]" doc:name="Copy_of_Set Variable" doc:id="c5db25b4-ae84-43dc-aad7-a7e378345e08" variableName="entity" />
+		<logger level="INFO" doc:name="Logger" doc:id="69ec0c60-dac9-4e02-b1ab-c0fc5c922dd2" message='#["called mapping visualiser"]'/>
+		<flow-ref doc:name="Read Mapping File" doc:id="208f4355-4afd-4074-8938-a175ce38b099" name="Read_Mapping_Sub_Flow"/>
+		<logger level="INFO" doc:name="Logger" doc:id="ddf2060e-0506-49fe-af8a-c489b2e31904" message="#[payload]"/>
+		<set-variable value="#[output application/json
+import * from dw::core::Strings
+---
+substringBefore(substringAfter(payload,'/*MappingDelimiterStart*/'), '/*MappingDelimiterEnd*/')]" doc:name="mapping" doc:id="48f3989f-c2ae-421d-9767-d1f6b7f954ff" variableName="mapping"/>
+		<logger level="INFO" doc:name="Logger" doc:id="2155241e-0efd-48b0-931d-fbe3651181ed" message="#[vars.mapping]"/>
+		<set-variable value="#[%dw 2.0&#10;output text/xml  writeDeclaration = false&#10;&#10;&#10;var keyValueArray =  (splitBy(vars.mapping,&quot;,\r\n&quot;)  map ($ replace  '\r\n'  with '') ) map ( $ )&#10;---&#10;table : (&#10;[{ tr: {th: &quot;DestinationColumn&quot;, th:&quot;MappingWithSourceColumn&quot;} }] ++  (keyValueArray  map  {  &#10;	tr:{&#10;		td:(splitBy($, &quot; : &quot; )[0]) , &#10;		td:{ form @( 'action': &quot;http://localhost:8081/mapping-modifier/&quot; ++ vars.entity ++ &quot;?mode=modify&quot; ,'method': &quot;post&quot; ) :&#10;			        {'input' @( 'name': (splitBy($, ' : ' )[0]) , 'value' : (splitBy($, ' : ' )[1]) ) : &quot;&quot; ,&#10;					 'input' @( 'type': &quot;submit&quot; ,'value': &quot;Modify&quot; ) : &quot;&quot;&#10;					}&#10;			}   &#10;		}  &#10;} )&#10;) reduce ($$ ++ $)]" doc:name="table" doc:id="f68d4661-64b1-414d-8b95-d9f77264908f" variableName="table"/>
+		<logger level="INFO" doc:name="Logger" doc:id="dab2f1f1-c529-4005-b9a5-a939dc81b4a5" message="#[vars.table]"/>
+		<parse-template doc:name="Parse Template" doc:id="bbe1205f-6537-47f1-9cff-1690238e6f02" outputMimeType="text/html">
+			<content >&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;style&gt;
+body {background-color: #FCFCFC;}
+h1 {text-align: center; color: #56C8F6}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #DDD;
+}
+
+tr:hover {background-color: #D6EEEE;}
+header {text-align: right;}
+
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;h1&gt;WEB EDITOR FOR DWL FILE&lt;/h1&gt;
+&lt;br/&gt;
+  &lt;header&gt;
+    &lt;b&gt;-by Dhileephan&lt;/b&gt;
+  &lt;/header&gt;
+
+&lt;h2&gt;File : #[vars.entity]&lt;/h2&gt;
+&lt;br/&gt;
+
+&lt;h2&gt;Modify Mapping&lt;/h2&gt;
+&lt;p&gt;Alter the mappings below and Press Submit button&lt;/p&gt;
+
+#[vars.table]
+
+
+&lt;br&gt;&lt;br&gt;
+&lt;h2&gt;New Mapping Adder&lt;/h2&gt;
+&lt;p&gt;Add new mappings below and Press Submit Button&lt;/p&gt;
+&lt;br&gt;&lt;br&gt;
+
+&lt;form action=&quot;http://localhost:8081/mapping-modifier/#[vars.entity]?mode=add&quot; method=&quot;post&quot;&gt;
+  &lt;label for=&quot;DestinationColumn&quot;&gt;Key Name:&lt;/label&gt;
+  &lt;input type=&quot;text&quot; id=&quot;DestinationColumn&quot; name=&quot;key&quot; value=&quot;&quot;&gt;
+  &lt;label for=&quot;MappingWithSourceColumn&quot;&gt;Value or Expression:&lt;/label&gt;
+  &lt;input type=&quot;text&quot; id=&quot;MappingWithSourceColumn&quot; name=&quot;value&quot; value=&quot;&quot;&gt;&lt;br&gt;&lt;br&gt;
+  &lt;input type=&quot;submit&quot; value=&quot;Submit&quot;&gt;
+&lt;/form&gt; 
+
+&lt;br&gt;&lt;br&gt;
+&lt;h2&gt;DWL Bulk Mode Editor&lt;/h2&gt;
+&lt;p&gt;After Modifying the DWL file, press Submit&lt;/p&gt;
+&lt;br&gt;&lt;br&gt;
+
+&lt;form action=&quot;http://localhost:8081/mapping-modifier/#[vars.entity]?mode=bulk&quot; method=&quot;post&quot;&gt;
+    &lt;textarea id=&quot;w3review&quot; name=&quot;dwlFile&quot; rows=&quot;30&quot; cols=&quot;100&quot;&gt;#[payload]&lt;/textarea&gt;&lt;br&gt;&lt;br&gt;
+  &lt;input type=&quot;submit&quot; value=&quot;Submit&quot;&gt;
+&lt;/form&gt; 
+
+&lt;br&gt;&lt;br&gt;
+&lt;br&gt;&lt;br&gt;
+&lt;br&gt;&lt;br&gt;
+&lt;br&gt;&lt;br&gt;
+
+
+
+&lt;/body&gt;
+&lt;/html&gt;</content>
+		</parse-template>
+	</flow>
+	<flow name="alter_mapping_Flow" doc:id="e93c988d-f53d-4292-8624-fc9ce0a11168" >
+		<http:listener doc:name="Listener" doc:id="608ee126-1fc1-4509-9121-a371a2815961" config-ref="HTTP_Listener_config" path="/mapping-modifier/{entity}">
+			<http:error-response >
+				<http:headers ><![CDATA[#[output application/java
+---
+{
+	"" : "Value"
+}]]]></http:headers>
+			</http:error-response>
+		</http:listener>
+		<set-variable value="#[attributes.queryParams.'mode']" doc:name="mode" doc:id="55fbf6ba-3e9d-43bd-9067-0fa45157ee89" variableName="mode"/>
+		<set-variable value="#[( attributes.uriParams.'entity' default &quot;employee&quot; )]" doc:name="entity" doc:id="5598a51f-6ced-401c-aafe-c21de405fea6" variableName="entity"/>
+		<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;payload]" doc:name="Copy_of_Copy_of_inputMapping" doc:id="ede6fdee-c343-4192-a715-70fdaba1a618" variableName="inputMapping" />
+		<logger level="INFO" doc:name="Logger" doc:id="3a850fd3-cb67-41ea-855f-a8c68df7a655" message="#[output application/json&#10;---&#10;vars.mode]"/>
+		<flow-ref doc:name="Read Mapping File" doc:id="d1335c57-4a33-4c82-9009-94114f3fa66e" name="Read_Mapping_Sub_Flow"/>
+		<flow-ref doc:name="mapping_mode" doc:id="9ffa9292-679f-4288-a4a2-2dda53b804d3" name="mapping_mode"/>
+		<flow-ref doc:name="Write to Mapping File" doc:id="9d39588f-dd1a-4baf-9e8a-83647c4ed8b8" name="Write_Mapping_Sub_Flow"/>
+		<flow-ref doc:name="Refresh and show web page" doc:id="10d4e172-220e-4cf9-8272-0db48835f062" name="visualize_mapping_Flow"/>
+	</flow>
+	
+	
+	
+	<flow name="mapping_mode" doc:id="fdb526ba-ebbf-4c48-bba8-2b7fe027b89a" >
+		<choice doc:name="Choice" doc:id="d0c8b764-77dc-4cbb-a32e-3b5cf4c669ce" >
+			<when expression="#[vars.mode == 'add']">
+				<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.inputMapping]" doc:name="inputMapping" doc:id="9ac23640-fc98-4d47-9424-299871c3218a" variableName="inputMapping" />
+				<set-variable value="#[output text/plain&#10;var inputMapping = ( &quot;,\r\n&quot; ++ vars.inputMapping.key ++ &quot; : &quot; ++  vars.inputMapping.value   ++  &quot;\r\n/*MappingDelimiterEnd*/&quot; )  as String default ''&#10;---&#10;payload  replace  &quot;\r\n/*MappingDelimiterEnd*/&quot; with inputMapping]" doc:name="Adding New Mapping" doc:id="c29bb3f2-7b07-4532-b499-3c46d10b44fb" variableName="updatedMapping" />
+			</when>
+			<when expression="#[vars.mode == 'modify']">
+				<set-variable value="#[%dw 2.0&#10;import * from dw::core::Objects&#10;output application/json&#10;---&#10;entrySet(vars.inputMapping)[0]]" doc:name="inputMapping" doc:id="5cd7fd0c-abaf-4920-b1f9-c69d740f00d6" variableName="inputMapping" />
+				<set-variable value="#[output application/json&#10;import * from dw::core::Strings&#10;&#10;var mappingsAlone = substringBefore(substringAfter(payload,'/*MappingDelimiterStart*/'), '/*MappingDelimiterEnd*/')&#10;---&#10;( (splitBy(mappingsAlone,&quot;\r\n&quot;)) filter (  ($ as String) contains  (vars.inputMapping.key as String)  ) )[0]]" doc:name="mappingToModify" doc:id="9014d01d-74d4-496a-9b19-540c2d3873ec" variableName="mappingToModify"/>
+				<set-variable value="#[output text/plain&#10;&#10;var isComma =  if(vars.mappingToModify contains ',') true else false&#10;var inputMapping =   if(isComma)  ( vars.inputMapping.key ++ &quot; : &quot; ++  vars.inputMapping.value  ++ ','  )  as String  &#10;                     else ( vars.inputMapping.key ++ &quot; : &quot; ++  vars.inputMapping.value  )  as String&#10;&#10;---&#10;&#10;payload  replace  vars.mappingToModify with inputMapping]" doc:name="Modify mapping" doc:id="70df6e0c-fb40-4fbf-bbad-69318e94446d" variableName="updatedMapping" />
+			</when>
+			<when expression="#[vars.mode == 'bulk']">
+				<set-variable value="#[%dw 2.0&#10;import * from dw::core::Objects&#10;output application/json&#10;---&#10;entrySet(vars.inputMapping)[0]]" doc:name="inputMapping" doc:id="4aa58adb-205d-4333-b5fa-de5c4dd2a623" variableName="inputMapping" />
+				<set-variable value="#[output text/plain&#10;---&#10;vars.inputMapping.value]" doc:name="Bulk Edit Mapping File" doc:id="e7974b73-1629-4fae-9762-a95f5b00a41f" variableName="updatedMapping" />
+			</when>
+			<when expression="#[vars.mode == 'delete']">
+				<set-variable value="#[%dw 2.0&#10;import * from dw::core::Objects&#10;output application/json&#10;---&#10;entrySet(vars.inputMapping)[0]]" doc:name="inputMapping" doc:id="2aab2e77-4ff2-48db-a264-11fbdce957f6" variableName="inputMapping" />
+				<set-variable value="#[output application/json&#10;import * from dw::core::Strings&#10;&#10;var mappingsAlone = substringBefore(substringAfter(payload,'/*MappingDelimiterStart*/'), '/*MappingDelimiterEnd*/')&#10;---&#10;( (splitBy(mappingsAlone,&quot;\r\n&quot;)) filter (  ($ as String) contains  (vars.inputMapping.key as String)  ) )[0]]" doc:name="mappingToDelete" doc:id="13098531-662b-4cdf-ad21-879842e7238f" variableName="mappingToDelete" />
+				<set-variable value="#[output text/plain&#10;&#10;var isComma =  if(vars.mappingToModify contains ',') true else false&#10;var mappingToReplace =   if(isComma)  ('\r\n' ++ vars.mappingToModify ) as String&#10;                            else   (',\r\n' ++ vars.mappingToModify)  as String&#10;---&#10;&#10;payload  replace  mappingToReplace with '\r\n']" doc:name="Delete a Mapping" doc:id="cb2940ea-48fd-474e-bb4c-92bf8acce0b2" variableName="updatedMapping" />
+			</when>
+		</choice>
+	</flow>
+	<sub-flow name="Read_Mapping_Sub_Flow" doc:id="4da70423-ba1a-4d8f-831a-3e5712eae041" >
+		<set-variable value="#[p('entity.' ++  (vars.entity as String) ++ '.connector')]" doc:name="connectorType" doc:id="fc1e87fe-90b8-4031-acef-8c17e671204f" variableName="connectorType"/>
+		<choice doc:name="Choice" doc:id="532f4a50-15b5-48e0-b1f4-bf1013fa5bfb">
+			<when expression="#[vars.connectorType == 'file']">
+				<file:read doc:name="Read" doc:id="b09d42c9-3724-4500-8d7a-39e08932779b" path="#[p('prototcols.file.basePath') ++ p('entity.' ++  vars.entity ++ '.mappingFileName')]" outputMimeType="application/java" outputEncoding="UTF-8" />
+			</when>
+			<when expression="#[vars.connectorType == 's3']">
+				<s3:get-object doc:name="Get object" doc:id="1cd0093b-ac37-480f-855c-586daf657671" config-ref="Amazon_S3_Configuration" bucketName="#[p('prototcols.s3.bucketName')]" key="#[p('prototcols.s3.basePath') ++ '/' ++ p('entity.' ++  vars.entity ++ '.mappingFileName')]" outputMimeType="application/java" outputEncoding="UTF-8"/>
+			
+</when>
+			<otherwise>
+				<raise-error doc:name="Raise error" doc:id="65f0c8ad-fbb5-462e-8b73-a4a7d7c22114" type="APP:INVALID_CONNECTOR_REFERENCE" description="mention proper connector name in mappings.yaml file"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="Write_Mapping_Sub_Flow" doc:id="4727937e-1059-4be9-9da9-201d0dfaa490" >
+		<set-variable value="#[p('entity.' ++  (vars.entity as String) ++ '.connector')]" doc:name="Copy_of_connectorType" doc:id="f17ef98a-ea36-4483-8bad-4876da121b62" variableName="connectorType" />
+		<choice doc:name="Copy_of_Choice" doc:id="e94be3a0-ac7e-4c5a-b233-f0941ef05695" >
+			<when expression="#[vars.connectorType == 'file']" >
+				<file:write doc:name="Alter File Mapping" doc:id="ae78b6eb-02f8-4963-8213-6a05210bdbb5" path="#[p('prototcols.file.basePath') ++ p('entity.' ++  vars.entity ++ '.mappingFileName')]" >
+					<file:content ><![CDATA[#[vars.updatedMapping]]]></file:content>
+				</file:write>
+			</when>
+			<when expression="#[vars.connectorType == 's3']" >
+				<s3:create-object doc:name="Alter s3 Mapping File" doc:id="7015c9f1-c033-40eb-86bb-1bb790909ed3" config-ref="Amazon_S3_Configuration" bucketName="#[p('prototcols.s3.bucketName')]" key="#[p('prototcols.s3.basePath') ++ '/' ++ p('entity.' ++  vars.entity ++ '.mappingFileName')]">
+					<s3:object-content ><![CDATA[#[vars.updatedMapping]]]></s3:object-content>
+				</s3:create-object>
+			</when>
+			<otherwise >
+				<raise-error doc:name="Copy_of_Raise error" doc:id="3aab4b9f-6d4f-4261-8c51-c7cafef63a63" type="APP:INVALID_CONNECTOR_REFERENCE" description="mention proper connector name in mappings.yaml file" />
+			</otherwise>
+		</choice>
+	</sub-flow>
+	
+	
+</mule>

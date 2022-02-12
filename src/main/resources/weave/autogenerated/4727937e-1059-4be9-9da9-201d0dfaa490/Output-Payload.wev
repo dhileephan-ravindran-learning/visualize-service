@@ -1,0 +1,12 @@
+%dw 2.0
+
+type auto_4727937e_1059_4be9_9da9_201d0dfaa490_Output_Payload = {|
+  etag?: String, 
+  expirationTime?: DateTime {"typeId": "java.time.LocalDateTime"}, 
+  expirationTimeRuleId?: String, 
+  lastModifiedDate?: DateTime {"typeId": "java.time.LocalDateTime"}, 
+  versionId?: String
+|} {"typeAlias": "ObjectResult",
+"class": "org.mule.extension.s3.api.model.ObjectResult",
+"typeId": "org.mule.extension.s3.api.model.ObjectResult"}
+

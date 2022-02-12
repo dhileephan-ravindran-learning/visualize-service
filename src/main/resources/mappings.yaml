@@ -1,0 +1,19 @@
+prototcols:
+  file:
+    basePath: "D:\\Learnings\\MappingVisualizer\\mappings\\"
+  s3:
+    bucketName: "mapping-visualizer"
+    basePath: "employee_app_bckt"
+    accessKey: "yourAccessKeyHere"
+    secretKey: "yourSecretKeyHere"
+
+entity:
+  employee:
+    connector: "s3"
+    mappingFileName: "employee.dwl"
+  employeeSalary:
+    connector: "s3"
+    mappingFileName: "employeeSalary.dwl"
+  employeeAge:
+    connector: "s3"
+    mappingFileName: "employeeAge.dwl"
